@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     'schedules',
     'records',
     'notifications',
-    'analysis',
+    'AIanalysis',
     'report',
     'pools',
     'clinic',
