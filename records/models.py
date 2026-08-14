@@ -40,7 +40,6 @@ class SkinRecord(models.Model):
 
     def __str__(self):
         return f"{self.swim_record} - {self.get_timing_display()}"
-from django.conf import settings
 
 """ # class SwimRecord(models.Model):   # pools 앱 모델 구현 후, 임시 주석
 #     TIMING_CHOICES = (
