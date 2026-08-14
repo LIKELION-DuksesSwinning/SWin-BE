@@ -97,3 +97,16 @@ class AgreementBulkUpdateSerializer(serializers.Serializer):
         child=AgreementUpdateItemSerializer(),
         allow_empty=False
     )
+    
+    
+    
+# 5.1.2 푸시 알림 설정
+class NotificationSettingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationSetting
+        fields = [
+            'swim_after_record_noti', 
+            'clinic_reservation_noti', 
+            'swim_schedule_noti', 
+            'weekly_report_noti'
+        ]

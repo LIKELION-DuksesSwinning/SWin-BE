@@ -84,3 +84,26 @@ class AgreementView(APIView):
             AgreementSerializer(updated_agreements, many=True).data,
             status=status.HTTP_200_OK
         )
+        
+        
+# 5.1.2 푸시 알림
+class NotificationSettingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # 5.1.2 알림 설정 조회 (GET)
+    def get(self, request):
+        setting, _ = NotificationSetting.objects.get_or_create(user=request.user)
+        serializer = NotificationSettingSerializer(setting)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # 5.1.2 알림 설정 변경 (PATCH)
+    def patch(self, request):
+        setting, _ = NotificationSetting.objects.get_or_create(user=request.user)
+        serializer = NotificationSettingSerializer(setting, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "알림 설정이 변경되었습니다.",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
