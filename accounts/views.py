@@ -107,3 +107,24 @@ class NotificationSettingView(APIView):
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+# 5.1.3 프로필 설정
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # 5.1.3 프로필 정보 조회 (GET)
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # 5.1.3 프로필 정보 수정 (PATCH)
+    def patch(self, request):
+        serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "프로필 정보가 성공적으로 수정되었습니다.",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

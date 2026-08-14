@@ -6,4 +6,5 @@ urlpatterns = [
     path('onboarding/', OnboardingView.as_view(), name='onboarding'),
     path('agreements/', AgreementView.as_view(), name='agreements'),
     path('settings/notifications/', NotificationSettingView.as_view(), name='notification-settings'),
+    path('profile/', UserProfileView.as_view(), name='profile'),
 ]

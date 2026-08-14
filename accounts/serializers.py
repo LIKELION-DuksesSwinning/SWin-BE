@@ -110,3 +110,13 @@ class NotificationSettingSerializer(serializers.ModelSerializer):
             'swim_schedule_noti', 
             'weekly_report_noti'
         ]
+        
+
+# 5.1.3 프로필 설정
+class UserProfileSerializer(serializers.ModelSerializer):
+    gender_display = serializers.CharField(source='get_gender_display', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'name', 'birth_date', 'gender', 'gender_display', 'region']
+        read_only_fields = ['id', 'username']
