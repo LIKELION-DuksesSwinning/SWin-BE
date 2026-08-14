@@ -23,7 +23,7 @@ def generate_weekly_report(user, week_start, week_end=None):
     # 1) 수영 횟수 / 평균 수영 시간 — AFTER 기록(swim_record) 기준
     swim_records = [a.swim_record for a in week_analyses if a.swim_record]
     swim_count = len(set(r.id for r in swim_records))
-    durations = [r.swim_duration for r in swim_records if getattr(r, "swim_duration", None)]
+    durations = [r.swim_time for r in swim_records if getattr(r, "swim_time", None)]
     avg_swim_duration = round(sum(durations) / len(durations)) if durations else 0
 
     # 2) symptomTrend — 각 분석의 symptomChanges(after 값)를 날짜별로 펼침
