@@ -7,4 +7,5 @@ urlpatterns = [
     path('agreements/', AgreementView.as_view(), name='agreements'),
     path('settings/notifications/', NotificationSettingView.as_view(), name='notification-settings'),
     path('profile/', UserProfileView.as_view(), name='profile'),
+    path('logout/', LogoutView.as_view(), name='logout'),
 ]

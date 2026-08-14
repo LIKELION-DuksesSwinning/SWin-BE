@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from .serializers import *
 from .models import *
 
@@ -128,3 +129,29 @@ class UserProfileView(APIView):
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+# 5.1.4 로그아웃
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # 5.1.4 로그아웃 (POST)
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            refresh_token = serializer.validated_data["refresh"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()  # 토큰 블랙리스트 처리
+
+            return Response(
+                {"message": "성공적으로 로그아웃되었습니다."}, 
+                status=status.HTTP_200_OK
+            )
+        except TokenError:
+            return Response(
+                {"detail": "유효하지 않거나 이미 만료된 토큰입니다."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )

@@ -120,3 +120,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'name', 'birth_date', 'gender', 'gender_display', 'region']
         read_only_fields = ['id', 'username']
+        
+        
+# 5.1.4 로그아웃
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=True)
