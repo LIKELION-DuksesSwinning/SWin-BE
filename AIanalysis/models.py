@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from .models import SwimRecord
+from records.models import SwimRecord
 
 User = settings.AUTH_USER_MODEL
 
