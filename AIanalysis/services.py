@@ -10,6 +10,8 @@ from .models import Analysis
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
+LEVEL_TO_SCORE = {"low": 1, "mid": 3, "high": 5}
+
 SKIN_ANALYSIS_SCHEMA = {
     "name": "skin_analysis",
     "schema": {
@@ -26,22 +28,6 @@ SKIN_ANALYSIS_SCHEMA = {
                 },
             },
             "patternDescription": {"type": "string"},
-            "symptomChanges": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "symptomType": {
-                            "type": "string",
-                            "enum": ["dryness", "tightness", "itchiness", "redness", "trouble"],
-                        },
-                        "before": {"type": "integer", "minimum": 1, "maximum": 5},
-                        "after": {"type": "integer", "minimum": 1, "maximum": 5},
-                    },
-                    "required": ["symptomType", "before", "after"],
-                    "additionalProperties": False,
-                },
-            },
         },
         "required": ["patternTypes", "patternDescription", "symptomChanges"],
         "additionalProperties": False,
@@ -65,7 +51,7 @@ def _build_skin_profile_text(user):
 
     chronic_symptoms = ", ".join(
         s.get_symptom_type_display() for s in profile.symptoms.all()
-    ) or "없음"
+    ) or "없음" 
     problem_areas = ", ".join(
         a.get_area_type_display() for a in profile.areas.all()
     ) or "특정 없음"
@@ -77,7 +63,7 @@ def _build_skin_profile_text(user):
 """
 
 
-def call_gpt_skin_analysis(user, before_symptom, after_symptom):
+def call_gpt_pattern_analysis(user, before_symptom, after_symptom):
     before_image_url = _encode_image(before_symptom.photo)
     after_image_url = _encode_image(after_symptom.photo)
     skin_profile_text = _build_skin_profile_text(user)
@@ -88,30 +74,21 @@ def call_gpt_skin_analysis(user, before_symptom, after_symptom):
     )
 
     prompt_text = f"""
-아래는 한 사용자의 기본 피부 정보와, 이번 수영 전/후 사진 및 기록이야.
-기본 피부 정보를 배경 지식으로 참고하고, 이번 수영으로 인한 실제 변화는 사진과 이번 기록을 기준으로 판단해줘.
+아래 두 장의 사진은 같은 사용자의 수영 전(첫 번째)과 수영 후(두 번째) 얼굴 사진이야.
+두 사진을 비교해서 피부에 어떤 패턴의 변화가 나타났는지 판단해줘.
 
-[사용자 기본 피부 정보 (온보딩 시 입력, 평소 상태)]
+[사용자 기본 피부 정보 (참고용, 평소 상태)]
 {skin_profile_text}
-※ 이건 "평소" 상태야. 이번 분석은 어디까지나 "이번 수영 전후 변화"에 집중하되,
-평소 취약한 부위/증상과 일치하는 변화가 보이면 patternDescription에 그 맥락을 반영해줘.
 
-[이번 수영 전 기록 (사용자 입력)]
-- 선택한 증상: {", ".join(before_symptom.symptom_types) or "없음"}
-- 증상별 강도(사용자가 직접 매김): {before_levels_text}
-- 특이사항: {before_symptom.note or "없음"}
-
-[이번 수영 후 기록 (사용자 입력)]
-- 선택한 증상: {", ".join(after_symptom.symptom_types) or "없음"}
-- 특이사항: {after_symptom.note or "없음"}
-※ 수영 후 강도는 사용자가 따로 입력하지 않았어. 두 번째로 첨부한 "수영 후" 사진과
-선택한 증상 종류를 참고해서, 네가 직접 1(약함)~5(심함)로 판단해줘.
-
-[분석 시 참고할 것]
-- 수영 전 강도(하/중/상)는 1~2(하), 3(중), 4~5(상) 정도로 환산해서 참고하되,
-사진에서 실제로 보이는 정도와 종합해서 최종 판단해줘.
-- symptomChanges는 두 사진에서 공통으로 판단 가능한 증상 종류만 포함해줘.
+[판단 기준]
+- patternTypes: 사진에서 관찰되는 변화를 아래 유형 중 해당하는 것 전부 선택 (복수 가능)
+redness_type(붉음), dry_tight_type(건조·당김), itch_type(가려움 반응),
+trouble_type(트러블/돌기), normal(이상 없음), need_expert(육안 판단이 어려워 전문가 확인 필요)
+- patternDescription: 수영 전후 사진에서 실제로 눈에 보이는 변화를 한두 문장으로 구체적으로 설명해줘.
+예: "수영 후 새로 생긴 오돌토돌한 돌기, 붉은 자국이 발견됐어요"처럼 관찰된 사실 위주로.
+- 증상의 강도(숫자)는 판단하지 않아도 돼. 이건 사용자가 직접 입력한 값을 따로 쓸 거야.
 """
+
 
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -128,6 +105,22 @@ def call_gpt_skin_analysis(user, before_symptom, after_symptom):
         response_format={"type": "json_schema", "json_schema": SKIN_ANALYSIS_SCHEMA},
     )
     return json.loads(response.choices[0].message.content)
+
+def build_symptom_changes(before_symptom, after_symptom):
+    """사용자가 직접 입력한 하/중/상 값만으로 계산. GPT 안 씀."""
+    all_types = set(before_symptom.symptom_types) | set(after_symptom.symptom_types)
+    changes = []
+    for symptom_type in sorted(all_types):
+        before_level = before_symptom.symptom_levels.get(symptom_type)
+        after_level = after_symptom.symptom_levels.get(symptom_type)
+        if before_level is None or after_level is None:
+            continue  # 전/후 둘 다 강도가 있어야 비교 가능
+        changes.append({
+            "symptomType": symptom_type,
+            "before": LEVEL_TO_SCORE[before_level],
+            "after": LEVEL_TO_SCORE[after_level],
+        })
+    return changes
 
 
 def calculate_four_week_trend(user, symptom_type, today=None):
@@ -203,19 +196,21 @@ def run_skin_analysis(user, swim_record):
     before_symptom = swim_record.symptoms.get(timing="before")
     after_symptom = swim_record.symptoms.get(timing="after")
 
-    gpt_result = call_gpt_skin_analysis(user, before_symptom, after_symptom)
+    pattern_result = call_gpt_pattern_analysis(user, before_symptom, after_symptom)
+    symptom_changes = build_symptom_changes(before_symptom, after_symptom)
+    four_week_trend = build_four_week_trend(user, symptom_changes)
 
-    four_week_trend = build_four_week_trend(user, gpt_result["symptomChanges"])
+
     clinic_recommended, trigger_reason = determine_clinic_recommendation(
-        user, gpt_result["symptomChanges"], four_week_trend
+user, symptom_changes, four_week_trend
     )
 
     analysis = Analysis.objects.create(
         user=user,
         swim_record=swim_record,
-        pattern_types=gpt_result["patternTypes"],
-        pattern_description=gpt_result["patternDescription"],
-        symptom_changes=gpt_result["symptomChanges"],
+        pattern_types=pattern_result["patternTypes"],
+        pattern_description=pattern_result["patternDescription"],
+        symptom_changes=pattern_result["symptomChanges"],
         four_week_trend=four_week_trend,
         clinic_recommended=clinic_recommended,
         clinic_trigger_reason=trigger_reason,
