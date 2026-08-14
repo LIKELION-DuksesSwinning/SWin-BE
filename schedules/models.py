@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 
-class Schedule(models.Model):  # 혜원 clinic 모델 앱 구현 후 
+class Schedule(models.Model):
     CATEGORY_CHOICES = (
         ('SWIM', '수영'),
         ('CLINIC', '클리닉'),
