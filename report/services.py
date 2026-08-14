@@ -6,6 +6,7 @@ from .models import WeeklyReport, RoutineRecommendation
 # Analysis에서 쓰던 1/3/5 숫자를 다시 low/mid/high로 되돌리는 역매핑
 SCORE_TO_LEVEL = {1: "low", 3: "mid", 5: "high"}
 
+SYMPTOM_TO_PRODUCTS = {}
 
 def generate_weekly_report(user, week_start, week_end=None):
     """
@@ -60,6 +61,17 @@ def generate_weekly_report(user, week_start, week_end=None):
     )
     return report
 
+def _find_dominant_symptom(week_analyses):
+    """이번 주 기록 중 after 점수가 가장 높게(심하게) 나온 증상 종류를 하나 고름"""
+    worst_symptom = None
+    worst_score = 0
+    for analysis in week_analyses:
+        for change in analysis.symptom_changes:
+            if change["after"] > worst_score:
+                worst_score = change["after"]
+                worst_symptom = change["symptomType"]
+    return worst_symptom
+
 
 def _check_pool_issue(swim_records, week_analyses):
     """
@@ -77,6 +89,19 @@ def _check_pool_issue(swim_records, week_analyses):
     flagged = sum(1 for a in week_analyses if a.clinic_recommended)
     return flagged >= (len(week_analyses) / 2)
 
+def _build_condition_text(dominant_symptom, worst_score):
+    """회복 모드일 때만 '복귀 조건' 문구 생성. 화면 예시: '붉음·당김이 2일 연속 감소하면 기존 루틴으로'"""
+    if worst_score >= 5 and dominant_symptom:
+        return f"{dominant_symptom}이(가) 2일 연속 감소하면 기존 루틴으로 돌아가세요."
+    return None 
+
+# TODO: 피부 관리 루틴 내용 미정 — 아래는 구조(틀)만 잡아둔 상태
+ROUTINE_STEPS = {
+    # "여드름": {"name": "트러블 루틴", "steps": [...]},
+    # "건조": {"name": "보습 강화 루틴", "steps": [...]},
+    # ...
+}
+
 
 def generate_routine_recommendation(weekly_report, user):
     """
@@ -91,7 +116,7 @@ def generate_routine_recommendation(weekly_report, user):
             worst_score = score_num
             dominant_symptom = change_entry["symptomType"]
 
-    # 심각도에 따른 회복/보통 모드 (swim_period 반영 로직은 추후 정교화)
+    # 심각도에 따른 회복/보통 모드
     try:
         profile = user.skin_profile
         base_count = profile.weekly_swim_count or 3
@@ -102,13 +127,17 @@ def generate_routine_recommendation(weekly_report, user):
     if worst_score >= 5:
         recommended_swim_count = max(1, round(base_count * 0.6))
         recommended_swim_minutes = max(20, round(base_duration * 0.6))
+        intensity_note = "회복 전까지 강도는 가볍게"
     elif worst_score >= 3:
         recommended_swim_count = max(1, round(base_count * 0.85))
         recommended_swim_minutes = max(30, round(base_duration * 0.9))
+        intensity_note = None
     else:
         recommended_swim_count = base_count
         recommended_swim_minutes = base_duration
+        intensity_note = None
 
+    condition_text = _build_condition_text(dominant_symptom, worst_score)
     skin_care_routine = _build_skin_care_routine(dominant_symptom)
 
     routine, _ = RoutineRecommendation.objects.update_or_create(
@@ -116,31 +145,14 @@ def generate_routine_recommendation(weekly_report, user):
         defaults={
             "recommended_swim_count": recommended_swim_count,
             "recommended_swim_minutes": recommended_swim_minutes,
+            "intensity_note": intensity_note,
+            "condition_text": condition_text,
             "skin_care_routine": skin_care_routine,
         },
     )
     return routine
 
 
-ROUTINE_STEPS = {
-    "여드름": {
-        "name": "트러블 루틴",
-        "steps": ["자극 없이 세정", "진정 제품을 얇게 바르기", "트러블 부위 손대지 않기", "증상이 지속되면 전문가 상담"],
-    },
-    "건조": {
-        "name": "보습 강화 루틴",
-        "steps": ["미온수로 염소 씻기", "물기를 가볍게 닦기", "3분 이내 보습크림 충분히 바르기"],
-    },
-    "당김": {
-        "name": "보습 강화 루틴",
-        "steps": ["미온수로 염소 씻기", "물기를 가볍게 닦기", "3분 이내 보습크림 충분히 바르기"],
-    },
-    # TODO: 가려움/붉음 루틴 텍스트는 팀 도메인 지식으로 채워야 함
-}
-
-
-# TODO: 1순위/2순위를 어떤 규칙으로 정할지 팀 확정 필요.
-# 지금은 "가장 심한 증상 1개만 1순위로 넣고 끝"으로 최소 구현함.
 
 def _build_skin_care_routine(dominant_symptom):
     routines = []

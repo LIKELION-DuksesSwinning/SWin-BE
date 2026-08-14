@@ -42,6 +42,9 @@ class RoutineRecommendation(models.Model):
     recommended_swim_count = models.PositiveIntegerField()
     recommended_swim_minutes = models.PositiveIntegerField()
 
+    intensity_note = models.CharField(max_length=100, null=True, blank=True)  # "회복 전까지 강도는 가볍게"
+    condition_text = models.CharField(max_length=200, null=True, blank=True)  # "붉음이 2일 연속 감소하면 기존 루틴으로"
+
     # skinCareRoutine: [{"name": "보습 강화 루틴", "steps": ["미온수 샤워", "수분 크림 도포"]}]
     skin_care_routine = models.JSONField(default=list)
 
