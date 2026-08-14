@@ -1,8 +1,10 @@
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .serializers import LoginSerializer, OnboardingSerializer
+from .serializers import *
+from .models import *
 
 # 0.1 로그인 API
 class LoginView(APIView):
@@ -38,4 +40,47 @@ class OnboardingView(APIView):
         return Response(
             {"detail": "필수 항목을 모두 입력해야 합니다."},
             status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# ==========================================
+# 5.1.1 약관 및 정책 API
+
+class AgreementView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # 약관 동의 목록 조회 (GET)
+    def get(self, request):
+        user = request.user
+        
+        # 유저에게 아직 생성되지 않은 약관이 있다면 기본값(False)으로 초기 레코드 생성
+        for term_code, _ in Agreement.TERMS_CHOICES:
+            Agreement.objects.get_or_create(user=user, terms_type=term_code)
+            
+        agreements = user.agreements.all().order_by('id')
+        serializer = AgreementSerializer(agreements, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # 약관 동의 상태 업데이트 (POST)
+    def post(self, request):
+        serializer = AgreementBulkUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        items = serializer.validated_data['agreements']
+
+        for item in items:
+            terms_type = item['terms_type']
+            is_agreed = item['is_agreed']
+            
+            agreement, _ = Agreement.objects.get_or_create(user=user, terms_type=terms_type)
+            agreement.is_agreed = is_agreed
+            agreement.agreed_at = timezone.now() if is_agreed else None
+            agreement.save()
+
+        updated_agreements = user.agreements.all().order_by('id')
+        return Response(
+            AgreementSerializer(updated_agreements, many=True).data,
+            status=status.HTTP_200_OK
         )
