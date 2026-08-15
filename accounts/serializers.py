@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User, UserSkinProfile, UserSkinSymptom, UserSkinArea
+from .models import *
 
 # 0.1 로그인 Serializer
 class LoginSerializer(serializers.Serializer):
@@ -73,3 +73,55 @@ class OnboardingSerializer(serializers.Serializer):
         UserSkinArea.objects.bulk_create(areas_objs)
 
         return profile
+    
+    
+# ==========================================   
+# 5.1.1 약관 및 정책 Serializer 추가
+ 
+    
+    # 약관 조회용 Serializer
+class AgreementSerializer(serializers.ModelSerializer):
+    terms_type_display = serializers.CharField(source='get_terms_type_display', read_only=True)
+
+    class Meta:
+        model = Agreement
+        fields = ['terms_type', 'terms_type_display', 'is_agreed', 'agreed_at']
+
+# 약관 일괄 업데이트(POST)용 Serializer
+class AgreementUpdateItemSerializer(serializers.Serializer):
+    terms_type = serializers.ChoiceField(choices=Agreement.TERMS_CHOICES)
+    is_agreed = serializers.BooleanField()
+
+class AgreementBulkUpdateSerializer(serializers.Serializer):
+    agreements = serializers.ListField(
+        child=AgreementUpdateItemSerializer(),
+        allow_empty=False
+    )
+    
+    
+    
+# 5.1.2 푸시 알림 설정
+class NotificationSettingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationSetting
+        fields = [
+            'swim_after_record_noti', 
+            'clinic_reservation_noti', 
+            'swim_schedule_noti', 
+            'weekly_report_noti'
+        ]
+        
+
+# 5.1.3 프로필 설정
+class UserProfileSerializer(serializers.ModelSerializer):
+    gender_display = serializers.CharField(source='get_gender_display', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'name', 'birth_date', 'gender', 'gender_display', 'region']
+        read_only_fields = ['id', 'username']
+        
+        
+# 5.1.4 로그아웃
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=True)
