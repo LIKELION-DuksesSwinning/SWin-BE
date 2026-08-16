@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from .models import Schedule
-from .serializers import ScheduleSerializer
+from .serializers import ScheduleSerializer, ScheduleCreateSerializer
 
 # 1.1.1 캘린더 월별 조회 & 1.1.2 일정 등록
 class ScheduleListCreateView(APIView):
@@ -17,7 +17,6 @@ class ScheduleListCreateView(APIView):
         year = request.query_params.get('year')
         month = request.query_params.get('month')
 
-        # 쿼리 파라미터가 들어온 경우 해당 연도/월로 필터링
         if year and month:
             queryset = queryset.filter(
                 start_datetime__year=year,
@@ -26,14 +25,17 @@ class ScheduleListCreateView(APIView):
 
         queryset = queryset.order_by('start_datetime')
         serializer = ScheduleSerializer(queryset, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({"schedules": serializer.data}, status=status.HTTP_200_OK)
 
     # 1.1.2 일정 직접 등록 (POST /api/v1/schedules/)
     def post(self, request):
-        serializer = ScheduleSerializer(data=request.data, context={'request': request})
+        serializer = ScheduleCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            instance = serializer.save()
+            return Response({
+                "schedule_id": instance.id if instance else None,
+                "message": "일정이 성공적으로 등록되었습니다."
+            }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -57,4 +59,4 @@ class ScheduleDetailView(APIView):
     def delete(self, request, schedule_id):
         schedule = self.get_object(schedule_id, request.user)
         schedule.delete()
-        return Response({"detail": "일정이 삭제되었습니다."}, status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
