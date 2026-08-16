@@ -1,40 +1,47 @@
 from django.conf import settings
 from django.db import models
-from records.models import SwimRecord
+
+User = settings.AUTH_USER_MODEL
+
 
 
 class Clinic(models.Model):
     name = models.CharField(max_length=100)
     district = models.CharField(max_length=50)
     phone = models.CharField(max_length=20)
+    address = models.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return self.name
 
 
-class ClinicReferral(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='clinic_referrals')
-    swim_record = models.ForeignKey(SwimRecord, on_delete=models.SET_NULL, null=True, blank=True, related_name='clinic_referrals')
-    trigger_reason = models.CharField(max_length=255) 
-    user_consented = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.user} - {self.trigger_reason}"
-
-
 class ClinicReservation(models.Model):
     class Status(models.TextChoices):
-        PENDING = 'pending', '예약 대기'
-        CONFIRMED = 'confirmed', '예약 확정'
-        CANCELLED = 'cancelled', '취소'
-        COMPLETED = 'completed', '방문 완료'
+        RECOMMENDED = "recommended", "권장됨"
+        BOOKED = "booked", "예약됨"
+        COMPLETED = "completed", "방문 완료"
+        CANCELLED = "cancelled", "취소됨"
+
+    class TriggerReason(models.TextChoices):
+        SCORE_STREAK = "score_streak", "증상 점수 연속 3회 이상 상승"
+        PHOTO_DIFF_SEVERE = "photo_diff_severe", "얼굴 사진에서 수영 전후 차이가 심함"
+
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='clinic_reservations')
-    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name='reservations')
-    visit_date = models.DateField()
-    visit_time = models.TimeField()
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    user_consented = models.BooleanField(default=False, verbose_name="자료 전달 동의 여부")
+    user_note = models.TextField(blank=True, verbose_name="사용자 기타 메모(요청사항)")
+
+    trigger_reason = models.CharField(max_length=20, choices=TriggerReason.choices, null=True, blank=True)
+    trigger_swim_record_ids = models.JSONField(default=list, blank=True)
+
+    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name='reservations', null=True)
+    visit_date = models.DateField(null=True, blank=True)
+    visit_time = models.TimeField(null=True, blank=True)
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.RECOMMENDED)
+
+    calendar_synced = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.user} - {self.clinic} - {self.visit_date}"
