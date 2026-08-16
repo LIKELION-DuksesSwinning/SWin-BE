@@ -1,12 +1,13 @@
 from datetime import timedelta
 
-from .models import Analysis
-from AIanalysis.models import WeeklyReport, RoutineRecommendation
+from AIanalysis.models import Analysis
+from .models import WeeklyReport, RoutineRecommendation
 
-# Analysis에서 쓰던 1/3/5 숫자를 다시 low/mid/high로 되돌리는 역매핑
-SCORE_TO_LEVEL = {1: "low", 3: "mid", 5: "high"}
+# Analysis에서 쓰던 1~5 숫자를 low/mid/high로 묶는 매핑 (1~2: low, 3: mid, 4~5: high)
+SCORE_TO_LEVEL = {1: "low", 2: "low", 3: "mid", 4: "high", 5: "high"}
 
-SYMPTOM_TO_PRODUCTS = {}
+# symptom_trend에 저장된 low/mid/high를 다시 대표 숫자로 되돌리는 역매핑 (심각도 비교/정렬용)
+LEVEL_TO_SCORE_NUM = {"low": 1, "mid": 3, "high": 5}
 
 PITH_PRODUCT_CATALOG = {
     "코어 리빌드 크림": {
@@ -48,7 +49,7 @@ def generate_weekly_report(user, week_start, week_end=None):
     # 1) 수영 횟수 / 평균 수영 시간 — AFTER 기록(swim_record) 기준
     swim_records = [a.swim_record for a in week_analyses if a.swim_record]
     swim_count = len(set(r.id for r in swim_records))
-    durations = [r.swim_time for r in swim_records if getattr(r, "swim_time", None)]
+    durations = [r.duration_minutes for r in swim_records if getattr(r, "duration_minutes", None)]
     avg_swim_duration = round(sum(durations) / len(durations)) if durations else 0
 
     # 2) symptomTrend — 각 분석의 symptomChanges(after 값)를 날짜별로 펼침
@@ -71,6 +72,9 @@ def generate_weekly_report(user, week_start, week_end=None):
     # 4) 다른 수영장 추천 — 같은 Pool에서 반복적으로 악화 패턴이 나오면 true (단순 규칙, 팀 확인 필요)
     other_pool_recommended = _check_pool_issue(swim_records, week_analyses)
 
+    # 5) 맞춤 케어 추천(성분/제품) — 이번 주 가장 심했던 증상 기준
+    recommended_ingredients, recommended_products = _build_care_recommendation(symptom_trend)
+
     report, _ = WeeklyReport.objects.update_or_create(
         user=user,
         week_start=week_start,
@@ -79,39 +83,41 @@ def generate_weekly_report(user, week_start, week_end=None):
             "swim_count": swim_count,
             "avg_swim_duration": avg_swim_duration,
             "symptom_trend": symptom_trend,
+            "recommended_ingredients": recommended_ingredients,
+            "recommended_products": recommended_products,
             "clinic_recommended": clinic_recommended,
             "other_pool_recommended": other_pool_recommended,
         },
     )
     return report
 
-def _find_dominant_symptom(week_analyses):
-    """이번 주 기록 중 after 점수가 가장 높게(심하게) 나온 증상 종류를 하나 고름"""
-    worst_symptom = None
+def _find_dominant_symptom(symptom_trend):
+    """symptom_trend(주간 low/mid/high 트렌드) 중 가장 심각한 증상 종류와 대표 점수를 고름"""
+    dominant_symptom = None
     worst_score = 0
-    for analysis in week_analyses:
-        for change in analysis.symptom_changes:
-            if change["after"] > worst_score:
-                worst_score = change["after"]
-                worst_symptom = change["symptomType"]
-    return worst_symptom
+    for entry in symptom_trend:
+        score_num = LEVEL_TO_SCORE_NUM[entry["score"]]
+        if score_num > worst_score:
+            worst_score = score_num
+            dominant_symptom = entry["symptomType"]
+    return dominant_symptom, worst_score
 
 def _select_pith_products(dominant_symptom, worst_score):
     """
-    가장 심했던 증상 하나 + 그 심각도(점수)를 기준으로 제품을 고름.
-    TODO: 여드름/가려움/트러블 전용 제품은 아직 카탈로그에 없어서 fallback(클래리파이 겔 토너)으로 처리 중.
+    가장 심했던 증상 하나(SkinRecord.SymptomType 코드) + 그 심각도(점수)를 기준으로 제품을 고름.
+    TODO: 가려움/트러블 전용 제품은 아직 카탈로그에 없어서 fallback(클래리파이 겔 토너)으로 처리 중.
     """
     selected = []
 
-    if dominant_symptom in ("건조", "당김"):
+    if dominant_symptom == "dry":
         selected.append("코어 리빌드 크림")
-    elif dominant_symptom == "붉음":
+    elif dominant_symptom == "redness":
         if worst_score >= 5:  # 상(HIGH) — 심한 붉음
             selected.append("블루 리페어 솔루션")
         else:  # 중(MID) 이하 — 가벼운 붉음
             selected.append("블루 리페어 하이드로 수딩 크림")
     else:
-        # 가려움/여드름/없음/기록 없음 — 아직 전용 제품 없어서 기본 컨디셔닝 제품으로 대체
+        # 가려움/트러블/없음/기록 없음 — 아직 전용 제품 없어서 기본 컨디셔닝 제품으로 대체
         selected.append("클래리파이 겔 토너")
 
     # 자외선 보호는 증상과 무관하게 항상 함께 안내 (야외 수영 전제)
@@ -218,25 +224,66 @@ ROUTINE_CATEGORY_STEPS = {
     },
 }
 
+# 증상 코드(SkinRecord.SymptomType) → 루틴 카테고리(ROUTINE_CATEGORY_STEPS 키) 매핑.
+# 가려움은 전용 루틴이 아직 없어 '진정·수분 루틴'으로 대체. none은 루틴 불필요.
+SYMPTOM_TO_ROUTINE_CATEGORY = {
+    "dry": "장벽 보습 루틴",
+    "redness": "진정·수분 루틴",
+    "itchy": "진정·수분 루틴",
+    "trouble": "트러블 최소자극 루틴",
+    "needs_check": "제품 추천 중단·상담",
+}
+
+MAX_ROUTINE_RECOMMENDATIONS = 2
+
+
+def _rank_symptom_severities(symptom_trend):
+    """symptom_type별 이번 주 최고 심각도(대표 점수)를 구해서 심각한 순으로 정렬"""
+    worst_by_type = {}
+    for entry in symptom_trend:
+        score_num = LEVEL_TO_SCORE_NUM[entry["score"]]
+        symptom_type = entry["symptomType"]
+        if score_num > worst_by_type.get(symptom_type, 0):
+            worst_by_type[symptom_type] = score_num
+    return sorted(worst_by_type.items(), key=lambda item: item[1], reverse=True)
+
+
+def _build_skin_care_routine(symptom_trend, max_routines=MAX_ROUTINE_RECOMMENDATIONS):
+    """
+    이번 주 가장 심각했던 증상 순으로 최대 max_routines개까지 루틴 추천(1순위/2순위).
+    needs_check가 하나라도 있으면 안전을 위해 항상 1순위로 올림.
+    같은 루틴 카테고리로 매핑되는 증상이 여러 개면(예: 붉음+가려움) 하나로 합침.
+    """
+    ranked_types = [t for t, _ in _rank_symptom_severities(symptom_trend) if t != "needs_check"]
+    if any(entry["symptomType"] == "needs_check" for entry in symptom_trend):
+        ranked_types = ["needs_check"] + ranked_types
+
+    routines = []
+    seen_categories = set()
+    for symptom_type in ranked_types:
+        category = SYMPTOM_TO_ROUTINE_CATEGORY.get(symptom_type)
+        if not category or category in seen_categories:
+            continue
+        seen_categories.add(category)
+        routines.append({**ROUTINE_CATEGORY_STEPS[category], "name": category, "priority": len(routines) + 1})
+        if len(routines) >= max_routines:
+            break
+
+    return routines
+
 
 def generate_routine_recommendation(weekly_report, user):
     """
     WeeklyReport 생성 직후 호출해서 1:1 루틴 추천을 만듦.
     swim_period(평소 패턴) 기반 비율 조정 로직은 별도 확정 필요
     """
-    dominant_symptom = None
-    worst_score = 0
-    for change_entry in weekly_report.symptom_trend:
-        score_num = {"low": 1, "mid": 3, "high": 5}[change_entry["score"]]
-        if score_num > worst_score:
-            worst_score = score_num
-            dominant_symptom = change_entry["symptomType"]
+    dominant_symptom, worst_score = _find_dominant_symptom(weekly_report.symptom_trend)
 
     # 심각도에 따른 회복/보통 모드
     try:
         profile = user.skin_profile
         base_count = profile.weekly_swim_count or 3
-        base_duration = profile.avg_swim_duration or 50
+        base_duration = profile.avg_swim_time or 50
     except AttributeError:
         base_count, base_duration = 3, 50
 
@@ -254,7 +301,7 @@ def generate_routine_recommendation(weekly_report, user):
         intensity_note = None
 
     condition_text = _build_condition_text(dominant_symptom, worst_score)
-    skin_care_routine = _build_skin_care_routine(dominant_symptom)
+    skin_care_routine = _build_skin_care_routine(weekly_report.symptom_trend)
 
     routine, _ = RoutineRecommendation.objects.update_or_create(
         weekly_report=weekly_report,
@@ -267,17 +314,3 @@ def generate_routine_recommendation(weekly_report, user):
         },
     )
     return routine
-
-def _build_condition_text(dominant_symptom, worst_score):
-    """회복 모드일 때만 '복귀 조건' 문구 생성. 화면 예시: '붉음·당김이 2일 연속 감소하면 기존 루틴으로'"""
-    if worst_score >= 5 and dominant_symptom:
-        return f"{dominant_symptom}이(가) 2일 연속 감소하면 기존 루틴으로 돌아가세요."
-    return None
-
-
-
-def _build_skin_care_routine(dominant_symptom):
-    routines = []
-    if dominant_symptom in ROUTINE_STEPS:
-        routines.append({**ROUTINE_STEPS[dominant_symptom], "priority": 1})
-    return routines
