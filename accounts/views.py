@@ -29,19 +29,24 @@ class OnboardingView(APIView):
         serializer = OnboardingSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             profile = serializer.save()
+            
+            # 클라이언트에게 성공 메시지와 함께 저장된 결과를 반환
             return Response(
                 {
-                    "profile_id": profile.id,
-                    "user_id": request.user.id,
-                    "message": "온보딩 정보가 성공적으로 저장되었습니다."
+                    "message": "사용자 피부 및 수영 기록이 성공적으로 저장되었습니다.",
+                    "data": {
+                        "swim_period": profile.swim_period,
+                        "weekly_swim_count": profile.weekly_swim_count,
+                        "avg_swim_time": profile.avg_swim_time,
+                        "skin_types": list(profile.skin_types.values_list('skin_type', flat=True)),
+                        "symptoms": list(profile.symptoms.values_list('symptom', flat=True)),
+                        "symptom_areas": list(profile.areas.values_list('area', flat=True)),
+                    }
                 },
                 status=status.HTTP_201_CREATED
             )
-        
-        return Response(
-            {"detail": "필수 항목을 모두 입력해야 합니다."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ==========================================
