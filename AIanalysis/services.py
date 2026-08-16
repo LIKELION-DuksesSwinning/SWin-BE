@@ -64,7 +64,6 @@ def find_before_after_records(after_record):
 def call_gpt_pattern_analysis(user, before_record, after_record):
     """
     photo_url이 외부에서 접근 가능한 URL이라는 전제로, base64 인코딩 없이 URL을 그대로 전달합니다.
-    (로컬 파일 경로라면 이 부분을 다시 고쳐야 해요 — 아래 확인사항 참고)
     """
     skin_profile_text = _build_skin_profile_text(user)
 
