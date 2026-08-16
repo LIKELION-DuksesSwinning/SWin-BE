@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from .models import Analysis
-from .models import WeeklyReport, RoutineRecommendation
+from AIanalysis.models import WeeklyReport, RoutineRecommendation
 
 # Analysis에서 쓰던 1/3/5 숫자를 다시 low/mid/high로 되돌리는 역매핑
 SCORE_TO_LEVEL = {1: "low", 3: "mid", 5: "high"}
