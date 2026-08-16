@@ -16,7 +16,7 @@ import re
 
 from django.core.management.base import BaseCommand, CommandError
 
-from pools.models import Pool, Region  # 실제 경로에 맞게 조정
+from pools.models import Pool, Region
 
 DONG_IN_PARENS = re.compile(r"\(([^)]+)\)")
 DISTRICT_PATTERN = re.compile(r"(\S+구)\s")
