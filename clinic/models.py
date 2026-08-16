@@ -39,9 +39,21 @@ class ClinicReservation(models.Model):
     visit_time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.RECOMMENDED)
 
+    # 방문 후 클리닉 직원/SWin 관리자가 Django admin에서 직접 입력 (외부 클리닉 시스템 연동 없음)
+    treatment_items = models.JSONField(default=list, blank=True, verbose_name="시술 내역")
+
     calendar_synced = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clinic", "visit_date", "visit_time"],
+                condition=models.Q(status="booked"),
+                name="unique_booked_clinic_slot",
+            )
+        ]
 
     def __str__(self):
         return f"{self.user} - {self.clinic} - {self.visit_date}"

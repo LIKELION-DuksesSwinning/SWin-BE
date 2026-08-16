@@ -1,3 +1,6 @@
+import datetime
+
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -27,6 +30,41 @@ class ClinicListView(generics.ListAPIView):
         if district:
             qs = qs.filter(district=district)
         return qs
+
+
+class ClinicAvailableTimesView(APIView):
+    """
+    GET /api/v1/clinics/{clinic_id}/available-times/?date=YYYY-MM-DD
+    — 4.2 시간대 선택 화면: 해당 클리닉·날짜에 이미 예약(booked)된 시간 목록.
+    프론트는 자체 고정 시간표(예: 10:00~21:00, 15분 단위)에서 이 목록에 포함된 시간을 비활성 처리하면 됨.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, clinic_id):
+        clinic = get_object_or_404(Clinic, pk=clinic_id)
+
+        date_str = request.query_params.get("date")
+        if not date_str:
+            return Response({"error": {"code": "VALIDATION_ERROR", "message": "date 쿼리 파라미터가 필요합니다."}}, status=400)
+        try:
+            visit_date = datetime.date.fromisoformat(date_str)
+        except ValueError:
+            return Response({"error": {"code": "VALIDATION_ERROR", "message": "date는 YYYY-MM-DD 형식이어야 합니다."}}, status=400)
+
+        booked_times = (
+            ClinicReservation.objects.filter(
+                clinic=clinic, visit_date=visit_date, status=ClinicReservation.Status.BOOKED
+            )
+            .order_by("visit_time")
+            .values_list("visit_time", flat=True)
+        )
+
+        return Response({
+            "clinicId": clinic.id,
+            "date": date_str,
+            "bookedTimes": [t.strftime("%H:%M") for t in booked_times],
+        })
 
 
 class ClinicReferralListView(generics.ListAPIView):
@@ -67,7 +105,7 @@ class ClinicReservationListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return ClinicReservation.objects.filter(user=self.request.user)
+        return ClinicReservation.objects.filter(user=self.request.user).select_related("clinic")
 
     def get_serializer_class(self):
         return (
