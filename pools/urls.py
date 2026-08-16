@@ -1,9 +1,17 @@
 from django.urls import path
 
-from .views import Region, Pool
+from .views import (
+    PoolDetailView,
+    PoolListView,
+    RegionCityListView,
+    RegionDistrictListView,
+    RegionDongListView,
+)
 
 urlpatterns = [
-    path("
-    path("reports/weekly/", WeeklyReportListView.as_view(), name="weekly-report-list"),
-    path("reports/weekly/<int:pk>/", WeeklyReportDetailView.as_view(), name="weekly-report-detail"),
+    path("regions/cities/", RegionCityListView.as_view(), name="pool-region-cities"),
+    path("regions/districts/", RegionDistrictListView.as_view(), name="pool-region-districts"),
+    path("regions/dongs/", RegionDongListView.as_view(), name="pool-region-dongs"),
+    path("", PoolListView.as_view(), name="pool-list"),
+    path("<int:pk>/", PoolDetailView.as_view(), name="pool-detail"),
 ]
