@@ -54,7 +54,12 @@ class SwimRecordDetailView(APIView):
 
     def patch(self, request, record_id):
         record = self.get_object(record_id, request.user)
-        serializer = SwimRecordDetailSerializer(record, data=request.data, partial=True, context={'request': request})
+        serializer = SwimRecordDetailSerializer(
+            record, 
+            data=request.data, 
+            partial=True, 
+            context={'request': request}
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
