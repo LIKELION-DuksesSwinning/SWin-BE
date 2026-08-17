@@ -8,15 +8,15 @@ from .services import run_skin_analysis
 
 class AnalysisListCreateView(generics.ListCreateAPIView):
     """
-    POST /api/v1/analysis/                     - 2.1.1 AI 피부 진단 실행
-    GET  /api/v1/analysis/?swimRecordId={id}   - 2.1.2 분석 이력 목록
+    POST /api/v1/analysis/skin/                       - 2.1.1 AI 피부 진단 실행
+    GET  /api/v1/analysis/skin/?swim_record_id={id}   - 2.1.2 분석 이력 목록
     """
 
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = Analysis.objects.filter(user=self.request.user)
-        swim_record_id = self.request.query_params.get("swimRecordId")
+        swim_record_id = self.request.query_params.get("swim_record_id")
         if swim_record_id:
             qs = qs.filter(swim_record_id=swim_record_id)
         return qs
