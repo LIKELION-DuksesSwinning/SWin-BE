@@ -3,8 +3,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import WeeklyReport
-from .serializers import WeeklyReportSerializer, WeeklyReportListSerializer
+from .models import RoutineRecommendation, WeeklyReport
+from .serializers import RoutineRecommendationSerializer, WeeklyReportSerializer, WeeklyReportListSerializer
 
 
 class WeeklyReportLatestView(APIView):
@@ -41,3 +41,19 @@ class WeeklyReportDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return WeeklyReport.objects.filter(user=self.request.user)
+
+
+class RoutineRecommendationLatestView(APIView):
+    """GET /api/v1/reports/routines/latest/ — 2.3.1 최신 수영 루틴 추천"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        routine = (
+            RoutineRecommendation.objects.filter(weekly_report__user=request.user)
+            .order_by("-weekly_report__week_start")
+            .first()
+        )
+        if not routine:
+            return Response({"error": {"code": "NOT_FOUND", "message": "아직 생성된 루틴 추천이 없습니다."}}, status=404)
+        return Response(RoutineRecommendationSerializer(routine).data)
