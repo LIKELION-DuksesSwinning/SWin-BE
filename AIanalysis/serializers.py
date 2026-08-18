@@ -13,18 +13,24 @@ class AnalysisCreateSerializer(serializers.Serializer):
 
         request = self.context["request"]
         try:
-            swim_record = SwimRecord.objects.get(id=value, user=request.user)
+            after_record = SwimRecord.objects.get(id=value, user=request.user, timing="AFTER")
         except SwimRecord.DoesNotExist:
-            raise serializers.ValidationError("본인 소유의 수영 기록이 아니거나 존재하지 않습니다.")
+            raise serializers.ValidationError("본인 소유의 '수영 후' 기록이 아니거나 존재하지 않습니다.")
 
-        has_before = swim_record.skin_records.filter(timing="before").exists()
-        has_after = swim_record.skin_records.filter(timing="after").exists()
-        if not (has_before and has_after):
+        if not after_record.schedule_id:
             raise serializers.ValidationError(
-                "분석하려면 수영 전/후 기록이 모두 필요합니다.", code="insufficient_data"
+                "일정과 연결되지 않은 기록은 분석할 수 없습니다.", code="insufficient_data"
             )
 
-        self.context["swim_record"] = swim_record
+        before_record = SwimRecord.objects.filter(
+            user=request.user, schedule_id=after_record.schedule_id, timing="BEFORE"
+        ).first()
+        if not before_record:
+            raise serializers.ValidationError(
+                "분석하려면 짝이 되는 수영 전(BEFORE) 기록이 필요합니다.", code="insufficient_data"
+            )
+
+        self.context["swim_record"] = after_record
         return value
 
 
