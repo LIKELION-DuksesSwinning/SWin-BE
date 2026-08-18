@@ -1,4 +1,6 @@
+import base64
 import json
+import mimetypes
 from datetime import timedelta
 
 from django.conf import settings
@@ -59,10 +61,19 @@ def find_before_after_records(after_record):
     ).first()
 
 
+def _photo_data_url(photo_field):
+    """
+    ImageField.url은 상대 경로(/media/...)라 GPT(OpenAI 서버)가 직접 접근할 수 없으므로,
+    파일을 읽어 base64 data URL로 인코딩해서 전달한다.
+    """
+    content_type = mimetypes.guess_type(photo_field.name)[0] or "image/jpeg"
+    with photo_field.open("rb") as f:
+        encoded = base64.b64encode(f.read()).decode("utf-8")
+    return f"data:{content_type};base64,{encoded}"
+
+
 def call_gpt_pattern_analysis(user, before_record, after_record):
-    """
-    photo_url이 외부에서 접근 가능한 URL이라는 전제로, base64 인코딩 없이 URL을 그대로 전달합니다.
-    """
+    """사진을 base64 data URL로 인코딩해서 GPT에 전달합니다."""
     skin_profile_text = _build_skin_profile_text(user)
 
     if not before_record.photo or not after_record.photo:
@@ -90,8 +101,8 @@ def call_gpt_pattern_analysis(user, before_record, after_record):
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt_text},
-                    {"type": "image_url", "image_url": {"url": before_record.photo.url}},
-                    {"type": "image_url", "image_url": {"url": after_record.photo.url}},
+                    {"type": "image_url", "image_url": {"url": _photo_data_url(before_record.photo)}},
+                    {"type": "image_url", "image_url": {"url": _photo_data_url(after_record.photo)}},
                 ],
             }
         ],
