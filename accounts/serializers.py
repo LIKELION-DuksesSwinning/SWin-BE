@@ -25,52 +25,71 @@ class LoginSerializer(serializers.Serializer):
         }
 
 # 0.2 온보딩 Serializer
+# 선택 옵션 유효성 검증용 리스트
+VALID_PERIODS = ["6개월 미만", "6개월~1년", "1~2년", "2~4년", "4년 이상"]
+VALID_SWIM_COUNTS = ["주 1~2회", "주 3~4회", "주 5회 이상"]
+VALID_SWIM_TIMES = ["30분 미만", "30~60분", "60~90분", "90분 이상"]
+VALID_SKIN_TYPES = ["건성", "지성", "복합성", "수부지", "민감성"]
+VALID_SYMPTOMS = ["당김", "건조", "가려움", "붉음", "여드름", "없음"]
+VALID_AREAS = ["이마", "왼쪽 볼", "오른쪽 볼", "나비존", "하관", "전체"]
+
 class OnboardingSerializer(serializers.Serializer):
-    weekly_swim_count = serializers.IntegerField(required=True, min_value=0)
-    avg_swim_time = serializers.IntegerField(required=True, min_value=1)
-    swim_period = serializers.CharField(required=True)
-    skin_type = serializers.CharField(required=True)
+    swim_period = serializers.ChoiceField(choices=VALID_PERIODS)
+    weekly_swim_count = serializers.ChoiceField(choices=VALID_SWIM_COUNTS)
+    avg_swim_time = serializers.ChoiceField(choices=VALID_SWIM_TIMES)
+    skin_types = serializers.ListField(
+        child=serializers.ChoiceField(choices=VALID_SKIN_TYPES),
+        allow_empty=False
+    )
     symptoms = serializers.ListField(
-        child=serializers.CharField(), required=True, allow_empty=False
+        child=serializers.ChoiceField(choices=VALID_SYMPTOMS),
+        allow_empty=False
     )
     symptom_areas = serializers.ListField(
-        child=serializers.CharField(), required=True, allow_empty=False
+        child=serializers.ChoiceField(choices=VALID_AREAS),
+        required=False,
+        default=list
     )
-    region = serializers.CharField(required=True)
 
     def create(self, validated_data):
         user = self.context['request'].user
-        
-        # 1. User 지역(region) 업데이트
-        user.region = validated_data['region']
-        user.save()
 
-        # 2. UserSkinProfile 생성 (이미 존재하면 update)
-        profile, created = UserSkinProfile.objects.update_or_create(
+        # 1. UserSkinProfile 생성 (이미 존재하면 update)
+        profile, _ = UserSkinProfile.objects.update_or_create(
             user=user,
             defaults={
                 'weekly_swim_count': validated_data['weekly_swim_count'],
                 'avg_swim_time': validated_data['avg_swim_time'],
                 'swim_period': validated_data['swim_period'],
-                'skin_type': validated_data['skin_type'],
             }
         )
 
-        # 3. 기존 증상/부위 데이터 초기화 후 재생성
+        # 2. 다중 선택 항목들 기존 데이터 삭제 후 일괄 생성
+        UserSkinType.objects.filter(profile=profile).delete()
         UserSkinSymptom.objects.filter(profile=profile).delete()
         UserSkinArea.objects.filter(profile=profile).delete()
 
-        symptoms_objs = [
+        # 피부 타입 일괄 생성
+        skin_type_objs = [
+            UserSkinType(profile=profile, skin_type=skin_type)
+            for skin_type in validated_data['skin_types']
+        ]
+        UserSkinType.objects.bulk_create(skin_type_objs)
+
+        # 증상 일괄 생성
+        symptom_objs = [
             UserSkinSymptom(profile=profile, symptom=symptom)
             for symptom in validated_data['symptoms']
         ]
-        UserSkinSymptom.objects.bulk_create(symptoms_objs)
+        UserSkinSymptom.objects.bulk_create(symptom_objs)
 
-        areas_objs = [
-            UserSkinArea(profile=profile, area=area)
-            for area in validated_data['symptom_areas']
-        ]
-        UserSkinArea.objects.bulk_create(areas_objs)
+        # 부위 일괄 생성 (선택된 경우만)
+        if validated_data.get('symptom_areas'):
+            area_objs = [
+                UserSkinArea(profile=profile, area=area)
+                for area in validated_data['symptom_areas']
+            ]
+            UserSkinArea.objects.bulk_create(area_objs)
 
         return profile
     
@@ -79,27 +98,18 @@ class OnboardingSerializer(serializers.Serializer):
 # 5.1.1 약관 및 정책 Serializer 추가
  
     
-    # 약관 조회용 Serializer
+# 5.1.1 약관 및 정책
 class AgreementSerializer(serializers.ModelSerializer):
-    terms_type_display = serializers.CharField(source='get_terms_type_display', read_only=True)
+    title = serializers.CharField(source='get_terms_type_display', read_only=True)
 
     class Meta:
         model = Agreement
-        fields = ['terms_type', 'terms_type_display', 'is_agreed', 'agreed_at']
+        fields = ['terms_type', 'title', 'is_agreed', 'agreed_at']
 
-# 약관 일괄 업데이트(POST)용 Serializer
-class AgreementUpdateItemSerializer(serializers.Serializer):
+class AgreementUpdateSerializer(serializers.Serializer):
     terms_type = serializers.ChoiceField(choices=Agreement.TERMS_CHOICES)
     is_agreed = serializers.BooleanField()
 
-class AgreementBulkUpdateSerializer(serializers.Serializer):
-    agreements = serializers.ListField(
-        child=AgreementUpdateItemSerializer(),
-        allow_empty=False
-    )
-    
-    
-    
 # 5.1.2 푸시 알림 설정
 class NotificationSettingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -110,18 +120,13 @@ class NotificationSettingSerializer(serializers.ModelSerializer):
             'swim_schedule_noti', 
             'weekly_report_noti'
         ]
-        
 
 # 5.1.3 프로필 설정
 class UserProfileSerializer(serializers.ModelSerializer):
-    gender_display = serializers.CharField(source='get_gender_display', read_only=True)
-
     class Meta:
         model = User
-        fields = ['id', 'username', 'name', 'birth_date', 'gender', 'gender_display', 'region']
-        read_only_fields = ['id', 'username']
-        
-        
+        fields = ['name', 'birth_date', 'gender']
+
 # 5.1.4 로그아웃
 class LogoutSerializer(serializers.Serializer):
-    refresh = serializers.CharField(required=True)
+    refresh_token = serializers.CharField(required=True)

@@ -9,8 +9,6 @@ from .models import Analysis
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-LEVEL_TO_SCORE = {"LOW": 1, "MID": 3, "HIGH": 5}
-
 SKIN_PATTERN_SCHEMA = {
     "name": "skin_pattern",
     "schema": {
@@ -37,12 +35,12 @@ SKIN_PATTERN_SCHEMA = {
 
 def _build_skin_profile_text(user):
     try:
-        profile = user.userskinprofile
+        profile = user.skin_profile
     except AttributeError:
         return "등록된 기본 피부 정보 없음"
 
-    chronic_symptoms = ", ".join(s.symptom_type for s in profile.userskinsymptom_set.all()) or "없음"
-    problem_areas = ", ".join(a.area_type for a in profile.userskinarea_set.all()) or "특정 없음"
+    chronic_symptoms = ", ".join(s.symptom for s in profile.symptoms.all()) or "없음"
+    problem_areas = ", ".join(a.area for a in profile.areas.all()) or "특정 없음"
 
     return f"""
 - 피부 타입: {profile.skin_type}
@@ -51,21 +49,34 @@ def _build_skin_profile_text(user):
 """
 
 
-def find_before_after_records(after_record):
-    """AFTER SwimRecord를 기준으로, 같은 schedule_id의 BEFORE 기록을 찾음"""
-    from records.models import SwimRecord
+def find_before_after_skin_records(swim_record):
+    """
+    같은 SwimRecord(수영 세션)에 속한 수영 전/후 SkinRecord를 각각 찾음.
+    한 시점(before/after)에 증상 타입별로 여러 SkinRecord가 있을 수 있음(가려움/붉음/트러블 등 동시 기록).
+    """
+    before_records = list(swim_record.skin_records.filter(timing="before"))
+    after_records = list(swim_record.skin_records.filter(timing="after"))
+    return before_records, after_records
 
-    before_record = SwimRecord.objects.filter(
-        schedule_id=after_record.schedule_id, timing="BEFORE"
-    ).first()
-    return before_record
+
+def _representative_photo(records):
+    """같은 시점(before/after)의 SkinRecord들 중 사진이 첨부된 첫 번째 것을 대표 사진으로 사용"""
+    for record in records:
+        if record.photo:
+            return record.photo
+    return None
 
 
-def call_gpt_pattern_analysis(user, before_record, after_record):
+def call_gpt_pattern_analysis(user, before_records, after_records):
     """
     photo_url이 외부에서 접근 가능한 URL이라는 전제로, base64 인코딩 없이 URL을 그대로 전달합니다.
     """
     skin_profile_text = _build_skin_profile_text(user)
+
+    before_photo = _representative_photo(before_records)
+    after_photo = _representative_photo(after_records)
+    if not before_photo or not after_photo:
+        raise ValueError("수영 전/후 사진이 첨부된 기록을 찾을 수 없습니다.")
 
     prompt_text = f"""
 아래 두 장의 사진은 같은 사용자의 수영 전(첫 번째)과 수영 후(두 번째) 얼굴 사진이야.
@@ -89,8 +100,8 @@ def call_gpt_pattern_analysis(user, before_record, after_record):
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt_text},
-                    {"type": "image_url", "image_url": {"url": before_record.photo.url}},
-                    {"type": "image_url", "image_url": {"url": after_record.photo.url}},
+                    {"type": "image_url", "image_url": {"url": before_photo.url}},
+                    {"type": "image_url", "image_url": {"url": after_photo.url}},
                 ],
             }
         ],
@@ -99,33 +110,23 @@ def call_gpt_pattern_analysis(user, before_record, after_record):
     return json.loads(response.choices[0].message.content)
 
 
-def build_symptom_changes(before_record, after_record):
+def build_symptom_changes(before_records, after_records):
     """
-    증상 하나당 행이 하나씩인 구조 반영.
-    related_name을 가정하지 않고 SwimRecordSymptom을 직접 필터링해서 조회.
-    symptom_type이 before/after 둘 다에 있는 것만 비교 대상으로 삼음.
+    같은 timing 안에서 symptom_type별로 SkinRecord가 하나씩 있다는 전제로,
+    before/after 양쪽에 다 있는 symptom_type만 비교 대상으로 삼음(예: 가려움/붉음/트러블 동시 비교).
     """
-    from records.models import SwimRecordSymptom 
-
-    before_symptoms = SwimRecordSymptom.objects.filter(swim_record=before_record)
-    after_symptoms = SwimRecordSymptom.objects.filter(swim_record=after_record)
-
-    before_map = {s.symptom_type: s.score for s in before_symptoms}
-    after_map = {s.symptom_type: s.score for s in after_symptoms}
+    before_map = {r.symptom_type: r.symptom_level for r in before_records}
+    after_map = {r.symptom_type: r.symptom_level for r in after_records}
 
     common_types = set(before_map) & set(after_map)
-    changes = []
-    for symptom_type in sorted(common_types):
-        before_level = before_map[symptom_type]
-        after_level = after_map[symptom_type]
-        if before_level not in LEVEL_TO_SCORE or after_level not in LEVEL_TO_SCORE:
-            continue  # intensity 값이 예상 형식(LOW/MID/HIGH)이 아니면 건너뜀
-        changes.append({
+    return [
+        {
             "symptomType": symptom_type,
-            "before": LEVEL_TO_SCORE[before_level],
-            "after": LEVEL_TO_SCORE[after_level],
-        })
-    return changes
+            "before": before_map[symptom_type],
+            "after": after_map[symptom_type],
+        }
+        for symptom_type in sorted(common_types)
+    ]
 
 
 def calculate_four_week_trend(user, symptom_type, today=None):
@@ -200,21 +201,17 @@ def determine_clinic_recommendation(user, symptom_changes, today=None):
     return False, None
 
 
-def run_skin_analysis(user, swim_record_id):
+def run_skin_analysis(user, swim_record):
     """
-    swim_record_id: '수영 후(AFTER)' SwimRecord의 id.
-    ERD상 Analysis가 SwimRecord와 (1:N)으로 직접 연결되는 구조라,
-    이 AFTER 기록을 기준(FK)으로 삼고 짝이 되는 BEFORE 기록은 schedule_id로 내부에서 찾음.
+    swim_record: 분석 대상 SwimRecord(수영 세션) 인스턴스.
+    view/serializer에서 이미 소유권 검증 및 전/후 기록 존재 여부를 확인했으므로 여기서 재조회하지 않는다.
     """
-    from records.models import SwimRecord
+    before_records, after_records = find_before_after_skin_records(swim_record)
+    if not before_records or not after_records:
+        raise ValueError("수영 전/후 피부 기록을 찾을 수 없습니다.")
 
-    after_record = SwimRecord.objects.get(id=swim_record_id, user=user, timing="AFTER")
-    before_record = find_before_after_records(after_record)
-    if not before_record:
-        raise ValueError("짝이 되는 수영 전(BEFORE) 기록을 찾을 수 없습니다.")
-
-    pattern_result = call_gpt_pattern_analysis(user, before_record, after_record)
-    symptom_changes = build_symptom_changes(before_record, after_record)
+    pattern_result = call_gpt_pattern_analysis(user, before_records, after_records)
+    symptom_changes = build_symptom_changes(before_records, after_records)
     four_week_trend = build_four_week_trend(user, symptom_changes)  # 2.1.2 분석화면 "과거 기록 비교" 표시용
     clinic_recommended, trigger_reason = determine_clinic_recommendation(
         user, symptom_changes
@@ -222,8 +219,7 @@ def run_skin_analysis(user, swim_record_id):
 
     analysis = Analysis.objects.create(
         user=user,
-        swim_record=after_record,
-        before_record=before_record,  # 추적용으로 추가 보관
+        swim_record=swim_record,
         pattern_types=pattern_result["patternTypes"],
         pattern_description=pattern_result["patternDescription"],
         symptom_changes=symptom_changes,

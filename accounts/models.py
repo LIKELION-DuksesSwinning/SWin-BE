@@ -16,22 +16,30 @@ class User(AbstractUser):
 
 class UserSkinProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='skin_profile')
-    weekly_swim_count = models.IntegerField()
-    avg_swim_time = models.IntegerField(help_text="분 단위")
-    swim_period = models.CharField(max_length=50)
-    skin_type = models.CharField(max_length=20) # 건성, 지성, 복합성, 수부지, 민감성
+    weekly_swim_count = models.CharField(max_length=20)
+    avg_swim_time = models.CharField(max_length=20)
+    swim_period = models.CharField(max_length=20)
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
+
+class UserSkinType(models.Model):
+    profile = models.ForeignKey(UserSkinProfile, on_delete=models.CASCADE, related_name='skin_types')
+    skin_type = models.CharField(max_length=20)
 
 class UserSkinSymptom(models.Model):
     profile = models.ForeignKey(UserSkinProfile, on_delete=models.CASCADE, related_name='symptoms')
-    symptom = models.CharField(max_length=30) # 당김, 건조, 가려움, 붉음, 여드름, 없음
+    symptom = models.CharField(max_length=30)
 
 class UserSkinArea(models.Model):
     profile = models.ForeignKey(UserSkinProfile, on_delete=models.CASCADE, related_name='areas')
-    area = models.CharField(max_length=30) # 이마, 볼, 나비존, 하관
+    area = models.CharField(max_length=30)
 
+# 5.1.1 약관 및 정책 (피그마 6개 항목 반영)
 class Agreement(models.Model):
     TERMS_CHOICES = (
-        ('PRIVACY_POLICY', '개인정보 처리방침 및 이용약관'),
+        ('TERMS_OF_SERVICE', '이용약관'),
+        ('PRIVACY_POLICY', '개인정보 처리방침'),
         ('THIRD_PARTY_DERNA', '개인정보 제3자 제공 동의서(Derna)'),
         ('THIRD_PARTY_SWIN', '개인정보 제3자 제공 동의서(SWin)'),
         ('SENSITIVE_INFO', '민감정보 수집·이용 동의서'),
@@ -42,6 +50,10 @@ class Agreement(models.Model):
     is_agreed = models.BooleanField(default=False)
     agreed_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        unique_together = ('user', 'terms_type')
+
+# 5.1.2 푸시 알림 설정
 class NotificationSetting(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='notification_setting')
     swim_after_record_noti = models.BooleanField(default=True)

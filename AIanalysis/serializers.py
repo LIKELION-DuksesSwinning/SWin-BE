@@ -17,8 +17,8 @@ class AnalysisCreateSerializer(serializers.Serializer):
         except SwimRecord.DoesNotExist:
             raise serializers.ValidationError("본인 소유의 수영 기록이 아니거나 존재하지 않습니다.")
 
-        has_before = swim_record.symptoms.filter(timing="before").exists()
-        has_after = swim_record.symptoms.filter(timing="after").exists()
+        has_before = swim_record.skin_records.filter(timing="before").exists()
+        has_after = swim_record.skin_records.filter(timing="after").exists()
         if not (has_before and has_after):
             raise serializers.ValidationError(
                 "분석하려면 수영 전/후 기록이 모두 필요합니다.", code="insufficient_data"
