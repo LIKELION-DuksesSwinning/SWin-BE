@@ -20,12 +20,12 @@ class LoginSerializer(serializers.Serializer):
         refresh = RefreshToken.for_user(user)
         return {
             'token': str(refresh.access_token),
+            'refresh_token': str(refresh),  # [추가] 로그아웃에 사용할 리프레시 토큰 반환
             'user_id': user.id,
             'name': user.name or user.username
         }
 
 # 0.2 온보딩 Serializer
-# 선택 옵션 유효성 검증용 리스트
 VALID_PERIODS = ["6개월 미만", "6개월~1년", "1~2년", "2~4년", "4년 이상"]
 VALID_SWIM_COUNTS = ["주 1~2회", "주 3~4회", "주 5회 이상"]
 VALID_SWIM_TIMES = ["30분 미만", "30~60분", "60~90분", "90분 이상"]
@@ -92,12 +92,9 @@ class OnboardingSerializer(serializers.Serializer):
             UserSkinArea.objects.bulk_create(area_objs)
 
         return profile
-    
-    
+
+
 # ==========================================   
-# 5.1.1 약관 및 정책 Serializer 추가
- 
-    
 # 5.1.1 약관 및 정책
 class AgreementSerializer(serializers.ModelSerializer):
     title = serializers.CharField(source='get_terms_type_display', read_only=True)
