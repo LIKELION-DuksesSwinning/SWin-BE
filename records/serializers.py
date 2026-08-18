@@ -1,6 +1,8 @@
 import json
 from rest_framework import serializers
 from .models import SwimRecord, SwimRecordSymptom
+from notifications.models import Notification  # [추가] 알림 모델 임포트
+
 
 class SwimRecordSymptomSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source='symptom_type')
@@ -14,7 +16,6 @@ class SwimRecordSymptomSerializer(serializers.ModelSerializer):
 class SwimRecordDetailSerializer(serializers.ModelSerializer):
     record_id = serializers.IntegerField(source='id', read_only=True)
     photo_url = serializers.SerializerMethodField()
-    # 조회 시에는 객체 리스트 반환
     symptoms = serializers.SerializerMethodField()
 
     class Meta:
@@ -43,15 +44,12 @@ class SwimRecordDetailSerializer(serializers.ModelSerializer):
     def get_symptoms(self, obj):
         return SwimRecordSymptomSerializer(obj.symptoms.all(), many=True).data
 
-    # PATCH 수정 시 증상(symptoms) 갱신 로직
     def update(self, instance, validated_data):
         request = self.context.get('request')
         symptoms_data = request.data.get('symptoms') if request else None
 
-        # 기본 필드 (swim_time, memo, photo 등) 수정
         instance = super().update(instance, validated_data)
 
-        # symptoms 데이터가 들어온 경우 기존 증상 삭제 후 새로 등록
         if symptoms_data is not None:
             if isinstance(symptoms_data, str):
                 try:
@@ -61,7 +59,6 @@ class SwimRecordDetailSerializer(serializers.ModelSerializer):
             else:
                 symptoms_list = symptoms_data
 
-            # 기존 증상 데이터 교체
             instance.symptoms.all().delete()
             symptom_instances = [
                 SwimRecordSymptom(
@@ -79,6 +76,7 @@ class SwimRecordDetailSerializer(serializers.ModelSerializer):
 
 # 1.2.1 / 1.2.2 수영 기록 등록 Serializer
 class SwimRecordCreateSerializer(serializers.ModelSerializer):
+    photo = serializers.ImageField(required=False, allow_null=True, allow_empty_file=True)
     symptoms = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:
@@ -97,6 +95,7 @@ class SwimRecordCreateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         swim_record = SwimRecord.objects.create(user=user, **validated_data)
 
+        # 1. 증상 데이터 저장
         if symptoms_data:
             if isinstance(symptoms_data, str):
                 try:
@@ -116,5 +115,19 @@ class SwimRecordCreateSerializer(serializers.ModelSerializer):
             ]
             if symptom_instances:
                 SwimRecordSymptom.objects.bulk_create(symptom_instances)
+
+        # 2. [추가] 기록 생성 시 알림(Notification) 자동 생성
+        timing_display = {
+            'BEFORE': '수영 전',
+            'AFTER': '수영 후',
+            'ADD': '추가'
+        }.get(swim_record.timing, '수영')
+
+        Notification.objects.create(
+            user=user,
+            category='SWIM_RECORD',
+            title=f"{timing_display} 피부 상태 기록 완료",
+            content=f"{timing_display} 피부 상태 및 기록이 정상적으로 저장되었습니다."
+        )
 
         return swim_record
