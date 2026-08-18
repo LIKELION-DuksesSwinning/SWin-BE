@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from decouple import config
+import os
 
 OPENAI_API_KEY = config("OPENAI_API_KEY")
 
@@ -151,3 +152,8 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     )
 }
+
+
+# Media files 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
