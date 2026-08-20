@@ -113,11 +113,22 @@ def call_gpt_pattern_analysis(user, before_record, after_record):
 
 SCORE_TO_NUM = {"하": 1, "중": 3, "상": 5}
 
+# 프론트(AfterSwimming.jsx 등)가 한글 자유 입력으로 보내는 symptom_type을,
+# API 응답에 내려줄 표준 코드로 변환한다. "없음"은 변화 항목에서 제외(매핑 없음 → 스킵).
+SYMPTOM_TYPE_TO_CODE = {
+    "붉음": "redness",
+    "건조": "dry",
+    "당김": "tight",
+    "가려움": "itchy",
+    "여드름": "trouble",
+}
+
 
 def build_symptom_changes(before_record, after_record):
     """
     SwimRecordSymptom(symptom_type + score 상/중/하)을 before/after 각각 조회해서,
     양쪽에 다 있는 symptom_type만 비교 대상으로 삼음.
+    symptomType은 SYMPTOM_TYPE_TO_CODE로 표준 코드(redness/dry/tight/itchy/trouble)로 변환해서 내려준다.
     """
     from records.models import SwimRecordSymptom
 
@@ -130,12 +141,15 @@ def build_symptom_changes(before_record, after_record):
     common_types = set(before_map) & set(after_map)
     changes = []
     for symptom_type in sorted(common_types):
+        code = SYMPTOM_TYPE_TO_CODE.get(symptom_type)
+        if not code:
+            continue
         before_score = before_map[symptom_type]
         after_score = after_map[symptom_type]
         if before_score not in SCORE_TO_NUM or after_score not in SCORE_TO_NUM:
             continue
         changes.append({
-            "symptomType": symptom_type,
+            "symptomType": code,
             "before": SCORE_TO_NUM[before_score],
             "after": SCORE_TO_NUM[after_score],
         })

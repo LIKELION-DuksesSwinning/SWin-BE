@@ -109,12 +109,12 @@ def _find_dominant_symptom(symptom_trend):
 
 def _select_pith_products(dominant_symptom, worst_score):
     """
-    가장 심했던 증상 하나(SkinRecord.SymptomType 코드) + 그 심각도(점수)를 기준으로 제품을 고름.
+    가장 심했던 증상 하나(AIanalysis.SYMPTOM_TYPE_TO_CODE 표준 코드) + 그 심각도(점수)를 기준으로 제품을 고름.
     TODO: 가려움/트러블 전용 제품은 아직 카탈로그에 없어서 fallback(클래리파이 겔 토너)으로 처리 중.
     """
     selected = []
 
-    if dominant_symptom == "dry":
+    if dominant_symptom in ("dry", "tight"):
         selected.append("코어 리빌드 크림")
     elif dominant_symptom == "redness":
         if worst_score >= 5:  # 상(HIGH) — 심한 붉음
@@ -166,11 +166,22 @@ def _check_pool_issue(swim_records, week_analyses):
     flagged = sum(1 for a in week_analyses if a.clinic_recommended)
     return flagged >= (len(week_analyses) / 2)
 
+# dominant_symptom(AIanalysis.SYMPTOM_TYPE_TO_CODE 표준 코드)을 사용자에게 보여줄 한글 라벨로 변환
+SYMPTOM_CODE_TO_LABEL = {
+    "redness": "붉음",
+    "dry": "건조",
+    "tight": "당김",
+    "itchy": "가려움",
+    "trouble": "여드름",
+}
+
+
 def _build_condition_text(dominant_symptom, worst_score):
-    """회복 모드일 때만 '복귀 조건' 문구 생성. 화면 예시: '붉음·당김이 2일 연속 감소하면 기존 루틴으로'"""
+    """회복 모드일 때만 '복귀 조건' 문구 생성. 화면 예시: '붉음이 2일 연속 감소하면 기존 루틴으로'"""
     if worst_score >= 5 and dominant_symptom:
-        return f"{dominant_symptom}이(가) 2일 연속 감소하면 기존 루틴으로 돌아가세요."
-    return None 
+        label = SYMPTOM_CODE_TO_LABEL.get(dominant_symptom, dominant_symptom)
+        return f"{label}이(가) 2일 연속 감소하면 기존 루틴으로 돌아가세요."
+    return None
 
 
 
@@ -229,15 +240,15 @@ ROUTINE_CATEGORY_STEPS = {
     },
 }
 
-# SwimRecordSymptom.symptom_type은 accounts.OnboardingSerializer의 VALID_SYMPTOMS와 같은
-# 한글 자유 입력값(당김/건조/가려움/붉음/여드름)으로 저장되므로, 그 값 기준으로 매핑한다.
-# "없음"은 매핑하지 않음(루틴 불필요). 가려움은 전용 루틴이 아직 없어 '진정·수분 루틴'으로 대체.
+# symptom_trend의 symptomType은 AIanalysis.SYMPTOM_TYPE_TO_CODE가 만든 표준 코드
+# (redness/dry/tight/itchy/trouble)이므로, 그 코드 기준으로 매핑한다.
+# "없음"은 애초에 symptom_changes에 안 들어옴(루틴 불필요). 가려움은 전용 루틴이 아직 없어 '진정·수분 루틴'으로 대체.
 SYMPTOM_TO_ROUTINE_CATEGORY = {
-    "건조": "장벽 보습 루틴",
-    "당김": "장벽 보습 루틴",
-    "붉음": "진정·수분 루틴",
-    "가려움": "진정·수분 루틴",
-    "여드름": "트러블 최소자극 루틴",
+    "dry": "장벽 보습 루틴",
+    "tight": "장벽 보습 루틴",
+    "redness": "진정·수분 루틴",
+    "itchy": "진정·수분 루틴",
+    "trouble": "트러블 최소자극 루틴",
 }
 
 MAX_ROUTINE_RECOMMENDATIONS = 2
