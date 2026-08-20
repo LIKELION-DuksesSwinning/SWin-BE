@@ -31,7 +31,7 @@ SECRET_KEY = 'django-insecure-wro%09n@pmy(0%nb1-i3*5=phetn(i3@y8+e3u3u5@p!(yrbfa
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['miseno.store', 'api.miseno.store', '13.124.242.242', 'localhost', '127.0.0.1']
 
 
 # Application definition
