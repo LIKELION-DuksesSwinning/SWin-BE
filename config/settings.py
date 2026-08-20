@@ -76,12 +76,12 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://swin-fe.vercel.app",
+    "https://swin-dukse.vercel.app",
 ]
 
 # POST/PUT 등 인증 요청 보안 통과를 위해 함께 추가 (권장)
 CSRF_TRUSTED_ORIGINS = [
-    "https://swin-fe.vercel.app",
+    "https://swin-dukse.vercel.app",
     "https://miseno.store",
 ]
 
