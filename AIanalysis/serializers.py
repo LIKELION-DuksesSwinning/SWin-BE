@@ -51,7 +51,8 @@ class AnalysisDetailSerializer(serializers.ModelSerializer):
         model = Analysis
         fields = [
             "id", "pattern_types", "pattern_description", "symptom_changes",
-            "four_week_trend", "clinic_recommendation", "disclaimer", "created_at",
+            "four_week_trend", "clinic_recommended", "clinic_trigger_reason",
+            "clinic_recommendation", "disclaimer", "created_at",
         ]
 
     def get_clinic_recommendation(self, obj):
