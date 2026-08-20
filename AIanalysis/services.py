@@ -195,15 +195,16 @@ def determine_clinic_recommendation(user, symptom_changes, today=None):
         if change["after"] - change["before"] >= 3:
             return True, Analysis.TriggerReason.PHOTO_DIFF_SEVERE
 
-    # 2) 증상 점수 연속 3회 이상 '상'(HIGH) 측정 — 동일 증상 기준, 최근 3개 분석 확인
+    # 2) 증상 점수 연속 3회 이상 '상'(HIGH) 측정 — 동일 증상 기준, 이번 분석 포함 최근 3개 확인
+    #    이번 분석은 아직 저장 전이라 DB 조회에 안 잡히므로, after_scores에 직접 먼저 넣어준다.
     for change in symptom_changes:
         symptom_type = change["symptomType"]
-        recent_three = (
+        recent_two = (
             Analysis.objects.filter(user=user, created_at__lte=today)
-            .order_by("-created_at")[:3]
+            .order_by("-created_at")[:2]
         )
-        after_scores = []
-        for a in recent_three:
+        after_scores = [change["after"]]
+        for a in recent_two:
             for c in a.symptom_changes:
                 if c["symptomType"] == symptom_type:
                     after_scores.append(c["after"])
