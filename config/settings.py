@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 from decouple import config
 import os
+from datetime import timedelta
 
 OPENAI_API_KEY = config("OPENAI_API_KEY")
 
@@ -171,3 +172,38 @@ REST_FRAMEWORK = {
 # Media files 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+
+SIMPLE_JWT = {
+    # Access Token 유효 시간 (테스트/시연용으로 1일 또는 원하는 시간으로 설정)
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    
+    # Refresh Token 유효 시간 (7일)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    
+    # 토큰 갱신 시 새 refresh token 발급 여부 및 블랙리스트 설정
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': False,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': "",
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'JSON_ENCODER': None,
+    'JWK_URL': None,
+    'LEEWAY': 0,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+
+    'JTI_CLAIM': 'jti',
+}
