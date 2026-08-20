@@ -70,7 +70,19 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True # 개발용 전체 허용
+CORS_ALLOW_ALL_ORIGINS = False
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://swin-fe.vercel.app",
+]
+
+# POST/PUT 등 인증 요청 보안 통과를 위해 함께 추가 (권장)
+CSRF_TRUSTED_ORIGINS = [
+    "https://swin-fe.vercel.app",
+    "https://miseno.store",
+]
 
 
 ROOT_URLCONF = 'config.urls'
