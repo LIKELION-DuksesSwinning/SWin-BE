@@ -11,27 +11,29 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-from decouple import config
-import os
+from decouple import Csv, config
 from datetime import timedelta
-
-OPENAI_API_KEY = config("OPENAI_API_KEY")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+OPENAI_API_KEY = config("OPENAI_API_KEY")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-wro%09n@pmy(0%nb1-i3*5=phetn(i3@y8+e3u3u5@p!(yrbfa'
+SECRET_KEY = config("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = ['miseno.store', 'api.miseno.store', '13.124.242.242', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default="miseno.store,api.miseno.store,13.124.242.242,localhost,127.0.0.1",
+    cast=Csv(),
+)
 
 
 # Application definition
@@ -71,19 +73,33 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=False, cast=bool)
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://swin-dukse.vercel.app",
-]
+CORS_ALLOWED_ORIGINS = config(
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:3000,http://localhost:5173,https://swin-dukse.vercel.app",
+    cast=Csv(),
+)
 
 # POST/PUT 등 인증 요청 보안 통과를 위해 함께 추가 (권장)
-CSRF_TRUSTED_ORIGINS = [
-    "https://swin-dukse.vercel.app",
-    "https://miseno.store",
-]
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="https://swin-dukse.vercel.app,https://miseno.store",
+    cast=Csv(),
+)
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
+SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=not DEBUG, cast=bool)
+CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
+SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False, cast=bool)
+SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=False, cast=bool)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
 
 
 ROOT_URLCONF = 'config.urls'
@@ -176,14 +192,14 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 SIMPLE_JWT = {
     # Access Token 유효 시간 (테스트/시연용으로 1일 또는 원하는 시간으로 설정)
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=config("ACCESS_TOKEN_LIFETIME_MINUTES", default=30, cast=int)),
     
     # Refresh Token 유효 시간 (7일)
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=config("REFRESH_TOKEN_LIFETIME_DAYS", default=7, cast=int)),
     
     # 토큰 갱신 시 새 refresh token 발급 여부 및 블랙리스트 설정
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': True,
+    'ROTATE_REFRESH_TOKENS': config("ROTATE_REFRESH_TOKENS", default=False, cast=bool),
+    'BLACKLIST_AFTER_ROTATION': config("BLACKLIST_AFTER_ROTATION", default=True, cast=bool),
     'UPDATE_LAST_LOGIN': False,
 
     'ALGORITHM': 'HS256',
