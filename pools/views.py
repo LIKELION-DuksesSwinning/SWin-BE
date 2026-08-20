@@ -1,8 +1,20 @@
 from rest_framework import generics
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 
 from .models import Pool, Region
 from .serializers import PoolSerializer, RegionSerializer
+
+
+def _parse_int_param(request, name):
+    """쿼리 파라미터를 정수로 파싱. 숫자가 아니면 500 대신 400으로 명확히 응답."""
+    value = request.query_params.get(name)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        raise ValidationError({name: f"{name}는 숫자여야 합니다."})
 
 
 class RegionCityListView(generics.ListAPIView):
@@ -22,7 +34,7 @@ class RegionDistrictListView(generics.ListAPIView):
     serializer_class = RegionSerializer
 
     def get_queryset(self):
-        city_id = self.request.query_params.get("city")
+        city_id = _parse_int_param(self.request, "city")
         qs = Region.objects.filter(level=Region.Level.SIGUNGU)
         if city_id:
             qs = qs.filter(parent_id=city_id)
@@ -36,7 +48,7 @@ class RegionDongListView(generics.ListAPIView):
     serializer_class = RegionSerializer
 
     def get_queryset(self):
-        district_id = self.request.query_params.get("district")
+        district_id = _parse_int_param(self.request, "district")
         qs = Region.objects.filter(level=Region.Level.DONG)
         if district_id:
             qs = qs.filter(parent_id=district_id)
@@ -51,7 +63,7 @@ class PoolListView(generics.ListAPIView):
 
     def get_queryset(self):
         qs = Pool.objects.all()
-        dong_id = self.request.query_params.get("dong")
+        dong_id = _parse_int_param(self.request, "dong")
         if dong_id:
             qs = qs.filter(dong_id=dong_id)
         return qs
