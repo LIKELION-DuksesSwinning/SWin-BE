@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -14,6 +16,35 @@ def _has_booking_conflict(clinic, visit_date, visit_time, exclude_pk=None):
     if exclude_pk is not None:
         qs = qs.exclude(pk=exclude_pk)
     return qs.exists()
+
+
+def _sync_calendar_schedule(reservation):
+    """
+    클리닉 예약 상태에 맞춰 홈 캘린더용 Schedule(category='CLINIC')을 동기화한다.
+    - 확정(booked) + 방문일시 있음 → Schedule 생성/갱신
+    - 취소(cancelled) → 연결된 Schedule 삭제
+    """
+    from schedules.models import Schedule
+
+    if reservation.status == ClinicReservation.Status.CANCELLED:
+        Schedule.objects.filter(clinic_reservation=reservation).delete()
+        return
+
+    if reservation.status == ClinicReservation.Status.BOOKED and reservation.visit_date and reservation.visit_time:
+        start = datetime.combine(reservation.visit_date, reservation.visit_time)
+        if timezone.is_naive(start):
+            start = timezone.make_aware(start)
+        end = start + timedelta(hours=1)
+
+        Schedule.objects.update_or_create(
+            clinic_reservation=reservation,
+            defaults={
+                "user": reservation.user,
+                "category": "CLINIC",
+                "start_datetime": start,
+                "end_datetime": end,
+            },
+        )
 
 
 class ClinicSerializer(serializers.ModelSerializer):
@@ -107,8 +138,10 @@ class ClinicReservationCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data["user"] = self.context["request"].user
         validated_data["status"] = ClinicReservation.Status.BOOKED
-        validated_data["calendar_synced"] = True  # TODO: 실제 캘린더 연동 로직 붙으면 교체
-        return super().create(validated_data)
+        validated_data["calendar_synced"] = True
+        reservation = super().create(validated_data)
+        _sync_calendar_schedule(reservation)
+        return reservation
 
 
 class ClinicReservationUpdateSerializer(serializers.ModelSerializer):
@@ -167,6 +200,7 @@ class ClinicReservationUpdateSerializer(serializers.ModelSerializer):
         if validated_data.get("status") == ClinicReservation.Status.CANCELLED:
             instance.status = ClinicReservation.Status.CANCELLED
             instance.save(update_fields=["status", "updated_at"])
+            _sync_calendar_schedule(instance)
             return instance
 
         for attr, value in validated_data.items():
@@ -174,7 +208,8 @@ class ClinicReservationUpdateSerializer(serializers.ModelSerializer):
 
         if instance.visit_date and instance.visit_time:
             instance.status = ClinicReservation.Status.BOOKED
-            instance.calendar_synced = True  # TODO: 실제 캘린더 연동 로직 붙으면 교체
+            instance.calendar_synced = True
 
         instance.save()
+        _sync_calendar_schedule(instance)
         return instance
