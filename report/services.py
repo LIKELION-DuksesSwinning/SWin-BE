@@ -9,6 +9,11 @@ SCORE_TO_LEVEL = {1: "low", 2: "low", 3: "mid", 4: "high", 5: "high"}
 # symptom_trend에 저장된 low/mid/high를 다시 대표 숫자로 되돌리는 역매핑 (심각도 비교/정렬용)
 LEVEL_TO_SCORE_NUM = {"low": 1, "mid": 3, "high": 5}
 
+# UserSkinProfile.weekly_swim_count/avg_swim_time은 accounts.OnboardingSerializer의
+# VALID_SWIM_COUNTS/VALID_SWIM_TIMES 카테고리 문자열로 저장되므로, 숫자 연산 전에 대표값으로 변환한다.
+WEEKLY_COUNT_TO_NUM = {"주 1~2회": 1.5, "주 3~4회": 3.5, "주 5회 이상": 5}
+SWIM_TIME_TO_MINUTES = {"30분 미만": 20, "30~60분": 45, "60~90분": 75, "90분 이상": 100}
+
 PITH_PRODUCT_CATALOG = {
     "코어 리빌드 크림": {
         "ingredients": ["글리세린", "세라마이드NP", "콜레스테롤", "스쿠알란", "지방산", "베타-시토스테롤"],
@@ -282,8 +287,8 @@ def generate_routine_recommendation(weekly_report, user):
     # 심각도에 따른 회복/보통 모드
     try:
         profile = user.skin_profile
-        base_count = profile.weekly_swim_count or 3
-        base_duration = profile.avg_swim_time or 50
+        base_count = WEEKLY_COUNT_TO_NUM.get(profile.weekly_swim_count, 3)
+        base_duration = SWIM_TIME_TO_MINUTES.get(profile.avg_swim_time, 50)
     except AttributeError:
         base_count, base_duration = 3, 50
 
