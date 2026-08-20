@@ -61,11 +61,13 @@ class ClinicMiniSerializer(serializers.ModelSerializer):
 
 class ClinicReferralListSerializer(serializers.ModelSerializer):
     triggerReasonDisplay = serializers.CharField(source="get_trigger_reason_display", read_only=True)
+    clinicId = serializers.IntegerField(source="clinic_id", read_only=True)
+    clinicName = serializers.CharField(source="clinic.name", read_only=True, default=None)
 
     class Meta:
         model = ClinicReservation
         fields = [
-            "id", "status", "trigger_reason", "triggerReasonDisplay",
+            "id", "status", "clinicId", "clinicName", "trigger_reason", "triggerReasonDisplay",
             "trigger_swim_record_ids", "user_consented", "user_note", "created_at",
         ]
 

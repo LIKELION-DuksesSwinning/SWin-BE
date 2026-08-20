@@ -229,14 +229,15 @@ ROUTINE_CATEGORY_STEPS = {
     },
 }
 
-# 증상 코드(SkinRecord.SymptomType) → 루틴 카테고리(ROUTINE_CATEGORY_STEPS 키) 매핑.
-# 가려움은 전용 루틴이 아직 없어 '진정·수분 루틴'으로 대체. none은 루틴 불필요.
+# SwimRecordSymptom.symptom_type은 accounts.OnboardingSerializer의 VALID_SYMPTOMS와 같은
+# 한글 자유 입력값(당김/건조/가려움/붉음/여드름)으로 저장되므로, 그 값 기준으로 매핑한다.
+# "없음"은 매핑하지 않음(루틴 불필요). 가려움은 전용 루틴이 아직 없어 '진정·수분 루틴'으로 대체.
 SYMPTOM_TO_ROUTINE_CATEGORY = {
-    "dry": "장벽 보습 루틴",
-    "redness": "진정·수분 루틴",
-    "itchy": "진정·수분 루틴",
-    "trouble": "트러블 최소자극 루틴",
-    "needs_check": "제품 추천 중단·상담",
+    "건조": "장벽 보습 루틴",
+    "당김": "장벽 보습 루틴",
+    "붉음": "진정·수분 루틴",
+    "가려움": "진정·수분 루틴",
+    "여드름": "트러블 최소자극 루틴",
 }
 
 MAX_ROUTINE_RECOMMENDATIONS = 2
@@ -256,12 +257,9 @@ def _rank_symptom_severities(symptom_trend):
 def _build_skin_care_routine(symptom_trend, max_routines=MAX_ROUTINE_RECOMMENDATIONS):
     """
     이번 주 가장 심각했던 증상 순으로 최대 max_routines개까지 루틴 추천(1순위/2순위).
-    needs_check가 하나라도 있으면 안전을 위해 항상 1순위로 올림.
     같은 루틴 카테고리로 매핑되는 증상이 여러 개면(예: 붉음+가려움) 하나로 합침.
     """
-    ranked_types = [t for t, _ in _rank_symptom_severities(symptom_trend) if t != "needs_check"]
-    if any(entry["symptomType"] == "needs_check" for entry in symptom_trend):
-        ranked_types = ["needs_check"] + ranked_types
+    ranked_types = [t for t, _ in _rank_symptom_severities(symptom_trend)]
 
     routines = []
     seen_categories = set()

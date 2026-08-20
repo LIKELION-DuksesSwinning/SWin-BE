@@ -51,6 +51,7 @@ class AnalysisListCreateView(generics.ListCreateAPIView):
             )
 
         self._refresh_weekly_report(request.user)
+        self._create_clinic_referral_if_needed(request.user, analysis)
 
         return Response(AnalysisDetailSerializer(analysis).data, status=status.HTTP_201_CREATED)
 
@@ -65,6 +66,36 @@ class AnalysisListCreateView(generics.ListCreateAPIView):
             generate_routine_recommendation(weekly_report, user)
         except Exception:
             pass  # 리포트 갱신 실패는 분석 결과 응답 자체를 막지 않는다
+
+    def _create_clinic_referral_if_needed(self, user, analysis):
+        """분석 결과 클리닉 방문이 권장되면, 클리닉 연계 권장 목록에 뜨도록 ClinicReservation을 만든다/갱신한다."""
+        if not analysis.clinic_recommended:
+            return
+
+        from clinic.models import Clinic, ClinicReservation
+
+        try:
+            # 현재 제휴 클리닉은 한 곳뿐이라 추천 생성 시 바로 연결해둔다.
+            clinic = Clinic.objects.first()
+
+            existing = ClinicReservation.objects.filter(
+                user=user, status=ClinicReservation.Status.RECOMMENDED
+            ).first()
+            if existing:
+                existing.clinic = existing.clinic or clinic
+                existing.trigger_reason = analysis.clinic_trigger_reason
+                existing.trigger_swim_record_ids = [analysis.swim_record_id]
+                existing.save(update_fields=["clinic", "trigger_reason", "trigger_swim_record_ids", "updated_at"])
+            else:
+                ClinicReservation.objects.create(
+                    user=user,
+                    clinic=clinic,
+                    status=ClinicReservation.Status.RECOMMENDED,
+                    trigger_reason=analysis.clinic_trigger_reason,
+                    trigger_swim_record_ids=[analysis.swim_record_id],
+                )
+        except Exception:
+            pass  # 추천 연계 실패는 분석 결과 응답 자체를 막지 않는다
 
 
 class AnalysisDetailView(generics.RetrieveAPIView):
