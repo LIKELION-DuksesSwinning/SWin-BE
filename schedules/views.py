@@ -17,7 +17,26 @@ class ScheduleListCreateView(APIView):
         year = request.query_params.get('year')
         month = request.query_params.get('month')
 
+        if bool(year) != bool(month):
+            return Response(
+                {"error": {"code": "VALIDATION_ERROR", "message": "year and month must be provided together."}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         if year and month:
+            try:
+                year = int(year)
+                month = int(month)
+            except ValueError:
+                return Response(
+                    {"error": {"code": "VALIDATION_ERROR", "message": "year and month must be numbers."}},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if month < 1 or month > 12:
+                return Response(
+                    {"error": {"code": "VALIDATION_ERROR", "message": "month must be between 1 and 12."}},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             queryset = queryset.filter(
                 start_datetime__year=year,
                 start_datetime__month=month
@@ -49,7 +68,7 @@ class ScheduleDetailView(APIView):
     # 일정 수정
     def patch(self, request, schedule_id):
         schedule = self.get_object(schedule_id, request.user)
-        serializer = ScheduleSerializer(schedule, data=request.data, partial=True)
+        serializer = ScheduleSerializer(schedule, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)

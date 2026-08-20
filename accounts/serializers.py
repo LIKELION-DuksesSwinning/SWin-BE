@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.db import transaction
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import *
 
@@ -51,6 +52,7 @@ class OnboardingSerializer(serializers.Serializer):
         default=list
     )
 
+    @transaction.atomic
     def create(self, validated_data):
         user = self.context['request'].user
 

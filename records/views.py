@@ -6,7 +6,8 @@ from django.shortcuts import get_object_or_404
 from .models import SwimRecord
 from .serializers import (
     SwimRecordCreateSerializer,
-    SwimRecordDetailSerializer
+    SwimRecordDetailSerializer,
+    SwimRecordUpdateSerializer,
 )
 
 # 1.2.1 / 1.2.2 수영 기록 등록 (POST) 및 홈 화면 목록 조회 (GET)
@@ -17,7 +18,7 @@ class SwimRecordListCreateView(APIView):
     # 홈 화면 내 수영 기록 목록 조회 (정렬 지원)
     def get(self, request):
         sort_option = request.query_params.get('sort', 'latest')
-        queryset = SwimRecord.objects.filter(user=request.user, timing__in=['BEFORE', 'AFTER'])
+        queryset = SwimRecord.objects.filter(user=request.user)
 
         if sort_option == 'oldest':
             queryset = queryset.order_by('created_at')
@@ -54,15 +55,18 @@ class SwimRecordDetailView(APIView):
 
     def patch(self, request, record_id):
         record = self.get_object(record_id, request.user)
-        serializer = SwimRecordDetailSerializer(
+        serializer = SwimRecordUpdateSerializer(
             record, 
             data=request.data, 
             partial=True, 
             context={'request': request}
         )
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            record = serializer.save()
+            return Response(
+                SwimRecordDetailSerializer(record, context={'request': request}).data,
+                status=status.HTTP_200_OK
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

@@ -1,6 +1,7 @@
 import uuid
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
+from django.db import transaction
 from rest_framework import serializers
 from .models import Schedule
 
@@ -26,6 +27,19 @@ class ScheduleSerializer(serializers.ModelSerializer):
             'clinic_reservation'
         ]
         read_only_fields = ['schedule_id', 'category_display']
+
+    def validate_clinic_reservation(self, clinic_reservation):
+        request = self.context.get('request')
+        if clinic_reservation and request and clinic_reservation.user_id != request.user.id:
+            raise serializers.ValidationError("Only your own clinic reservation can be linked.")
+        return clinic_reservation
+
+    def validate(self, data):
+        start_datetime = data.get('start_datetime', self.instance.start_datetime if self.instance else None)
+        end_datetime = data.get('end_datetime', self.instance.end_datetime if self.instance else None)
+        if start_datetime and end_datetime and start_datetime >= end_datetime:
+            raise serializers.ValidationError("end_datetime must be after start_datetime.")
+        return data
 
 
 # 일정 등록 전용 Serializer (반복 bulk_create 지원)
@@ -54,6 +68,11 @@ class ScheduleCreateSerializer(serializers.ModelSerializer):
         if data.get('start_datetime') >= data.get('end_datetime'):
             raise serializers.ValidationError("종료 일시는 시작 일시 이후여야 합니다.")
 
+        request = self.context.get('request')
+        clinic_reservation = data.get('clinic_reservation')
+        if clinic_reservation and request and clinic_reservation.user_id != request.user.id:
+            raise serializers.ValidationError({"clinic_reservation": "Only your own clinic reservation can be linked."})
+
         if data.get('is_repeat'):
             end_type = data.get('repeat_end_type')
             if not end_type:
@@ -64,6 +83,7 @@ class ScheduleCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"repeat_until": "반복 종료 날짜를 지정해주세요."})
         return data
 
+    @transaction.atomic
     def create(self, validated_data):
         user = self.context['request'].user
         is_repeat = validated_data.get('is_repeat', False)
